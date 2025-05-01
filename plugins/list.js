@@ -1,13 +1,16 @@
-const { writeFileSync } = require('fs');
+const path = require('path');
+const fs = require('fs');
+
+// Define the complete path to your assets folder
+const ASSETS_FOLDER = path.join(__dirname, '../assets');
+const IMAGE_FILE = 'list.jpg';
+const IMAGE_PATH = path.join(ASSETS_FOLDER, IMAGE_FILE);
 
 module.exports = {
     name: 'list',
     description: 'Show all available commands with explanations',
     execute: async ({ sock, msg }) => {
         try {
-            // Create the command list image (you should prepare list.png separately)
-            // For now we'll just send the text explanation
-            
             const commandList = `
 📋 *COMMAND LIST* 📋
 
@@ -24,6 +27,7 @@ module.exports = {
 ┣✦ !advancedglow - Glowing text
 ┣✦ !cloudheart - Cloud heart text
 ┣✦ !window - Window text effect
+┣✦ !cat - Cat-themed text maker
 
 *⚙️ UTILITY COMMANDS*
 ┣✦ !ping - Check bot response
@@ -42,7 +46,6 @@ module.exports = {
 ┣✦ !ytv - Download YouTube video
 ┣✦ !yta - Download YouTube audio
 ┣✦ !vv - Anti-view-once message
-┣✦ !cat - Random cat images
 
 *🤖 AI TOOLS*
 ┣✦ !gemini - Use Google AI (Gemini)
@@ -55,13 +58,25 @@ module.exports = {
 3. Owner commands are restricted
             `;
 
-            await sock.sendMessage(msg.key.remoteJid, {
-                image: { url: 'list.png' }, // Make sure this image exists
-                caption: commandList
-            });
+            // Check if image exists
+            if (fs.existsSync(IMAGE_PATH)) {
+                await sock.sendMessage(msg.key.remoteJid, {
+                    image: { url: IMAGE_PATH },
+                    caption: commandList,
+                    mimetype: 'image/jpeg'
+                });
+            } else {
+                // Fallback to text-only version
+                console.warn(`Image not found at: ${IMAGE_PATH}`);
+                await sock.sendMessage(msg.key.remoteJid, {
+                    text: commandList + `\n\nℹ️ Image preview not available (${IMAGE_FILE} missing)`
+                });
+            }
+
         } catch (error) {
+            console.error('Error in list command:', error);
             await sock.sendMessage(msg.key.remoteJid, {
-                text: `❌ Error showing command list: ${error.message}`
+                text: `📋 *COMMAND LIST* (Text-only version)\n\n${commandList}\n\n❌ Error loading image: ${error.message}`
             });
         }
     }
