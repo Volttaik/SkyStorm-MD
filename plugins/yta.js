@@ -1,26 +1,44 @@
 const fs = require('fs');
 const path = require('path');
 const youtubedl = require('youtube-dl-exec');
+const axios = require('axios');
 const { makeWASocket } = require('@whiskeysockets/baileys');
 
 module.exports = {
     name: 'yta',
-    description: 'Download YouTube audio using youtube-dl-exec',
+    description: 'Download YouTube audio by URL or search query',
     execute: async ({ sock, msg, args }) => {
         const chatId = msg.key.remoteJid;
-        const url = args[0];
+        const query = args.join(' ');
 
-        if (!url) {
-            await sock.sendMessage(chatId, { text: '❌ Please provide a YouTube URL.' });
+        if (!query) {
+            await sock.sendMessage(chatId, { text: '❌ Please provide a YouTube URL or search query.\nExample:\n• !yta https://youtu.be/example\n• !yta never gonna give you up' });
             return;
         }
 
         try {
+            let videoUrl = query;
+            
+            // If it's not a URL, treat as search query
+            if (!query.match(/^(http(s)?:\/\/)?((w){3}.)?youtu(be|.be)?(\.com)?\/.+/)) {
+                await sock.sendMessage(chatId, { text: '🔍 Searching YouTube...' });
+                
+                const searchResults = await axios.get(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`);
+                const videoIds = searchResults.data.match(/"videoId":"([^"]{11})"/g);
+                
+                if (!videoIds || videoIds.length === 0) {
+                    await sock.sendMessage(chatId, { text: '❌ No videos found for your search.' });
+                    return;
+                }
+                
+                videoUrl = `https://youtube.com/watch?v=${videoIds[0].split('"')[3]}`;
+            }
+
             // Check if URL is valid
             await sock.sendMessage(chatId, { text: '🔍 Checking video info...' });
 
             // Get video info first
-            const info = await youtubedl(url, {
+            const info = await youtubedl(videoUrl, {
                 dumpSingleJson: true,
                 noCheckCertificates: true,
                 noWarnings: true,
@@ -34,8 +52,8 @@ module.exports = {
                 return;
             }
 
-            await sock.sendMessage(chatId, { 
-                text: `⬇️ Downloading: ${info.title}\n⏳ Please wait...` 
+            await sock.sendMessage(chatId, {
+                text: `⬇️ Downloading: ${info.title}\n⏳ Please wait...`
             });
 
             // Create temp directory
@@ -47,7 +65,7 @@ module.exports = {
             const outputPath = path.join(tempDir, `${Date.now()}.mp3`);
 
             // Download audio
-            await youtubedl(url, {
+            await youtubedl(videoUrl, {
                 extractAudio: true,
                 audioFormat: 'mp3',
                 audioQuality: 0, // best quality
@@ -79,8 +97,8 @@ module.exports = {
 
         } catch (error) {
             console.error('Download error:', error);
-            await sock.sendMessage(chatId, { 
-                text: '❌ Download failed. Possible reasons:\n- Video is private/restricted\n- Server error\n- Video too long'
+            await sock.sendMessage(chatId, {
+                text: '❌ Download failed. Possible reasons:\n- Video is private/restricted\n- Server error\n- Video too long\n- Invalid URL/search query'
             });
         }
     }
